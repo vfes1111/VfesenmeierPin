@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-TRQ">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AP FRQ Grader (Gemini AI)</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #333;
+            text-align: center;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        textarea, input[type="text"], input[type="password"] {
+            width: 98%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box; /* So padding doesn't increase width */
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e9ecef;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            white-space: pre-wrap; /* To respect newlines from AI */
+        }
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 10px;
+            border: 1px solid #ffeeba;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AP FRQ Grader (with Gemini AI)</h1>
+
+        <div class="warning">
+            <strong>Important:</strong> This tool uses your Google Gemini API Key directly in the browser.
+            This is for local, personal use ONLY. Do NOT share this file with your API key saved in it or host it online.
+        </div>
+
+        <label for="apiKey">Your Google Gemini API Key:</label>
+        <input type="password" id="apiKey" placeholder="Paste your API Key here">
+
+        <label for="frqQuestion">AP FRQ Question:</label>
+        <textarea id="frqQuestion" placeholder="Paste the full FRQ question here."></textarea>
+
+        <label for="rubric">Scoring Rubric/Guidelines:</label>
+        <textarea id="rubric" placeholder="Paste the official scoring rubric or key points for grading. Be as detailed as possible."></textarea>
+
+        <label for="studentResponse">Student's Response:</label>
+        <textarea id="studentResponse" placeholder="Paste the student's full response here."></textarea>
+
+        <button onclick="gradeResponse()">Grade with Gemini AI</button>
+
+        <h2>Grading Result:</h2>
+        <div id="result">
+            The AI's feedback will appear here...
+        </div>
+    </div>
+
+    <script>
+        async function gradeResponse() {
+            const apiKey = document.getElementById('apiKey').value;
+            const frqQuestion = document.getElementById('frqQuestion').value;
+            const rubric = document.getElementById('rubric').value;
+            const studentResponse = document.getElementById('studentResponse').value;
+            const resultDiv = document.getElementById('result');
+
+            resultDiv.textContent = 'Processing... Please wait.';
+
+            if (!apiKey || !frqQuestion || !rubric || !studentResponse) {
+                resultDiv.textContent = 'Error: Please fill in all fields, including your API Key.';
+                return;
+            }
+
+            // This is the prompt we will send to Gemini
+            const prompt = `
+You are an expert AP Grader AI. Your task is to grade the following student's response to an AP Free Response Question (FRQ) based on the provided rubric.
+
+Please provide the following in your evaluation:
+1.  A specific score (e.g., "Score: X out of Y points" or if points aren't specified in rubric, a qualitative score like "Exceeds Expectations", "Meets Expectations", "Needs Improvement").
+2.  Detailed feedback, specifically referencing parts of the rubric to justify the score. Explain what the student did well and where they missed points or could improve according to the rubric.
+3.  Constructive suggestions for how the student could improve their response to earn more points or better meet the rubric's criteria.
+4.  Format your output clearly and make it easy to read.
+
+Here is the information:
+
+**AP FRQ Question:**
+${frqQuestion}
+
+**Official Rubric/Scoring Guidelines:**
+${rubric}
+
+**Student's Response:**
+${studentResponse}
+
+**Begin Evaluation:**
+`;
+
+            const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: prompt
+                            }]
+                        }]
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('API Error:', errorData);
+                    resultDiv.textContent = `Error from API: ${response.status} ${response.statusText}. Check console for details. Is your API Key correct and enabled?`;
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.candidates && data.candidates.length > 0 &&
+                    data.candidates[0].content && data.candidates[0].content.parts &&
+                    data.candidates[0].content.parts.length > 0) {
+                    resultDiv.textContent = data.candidates[0].content.parts[0].text;
+                } else {
+                    console.error('Unexpected API response structure:', data);
+                    resultDiv.textContent = 'Error: Could not extract text from AI response. Check console for details.';
+                    if (data.promptFeedback && data.promptFeedback.blockReason) {
+                         resultDiv.textContent += `\nReason: ${data.promptFeedback.blockReason}`;
+                         if (data.promptFeedback.safetyRatings) {
+                             resultDiv.textContent += `\nSafety Issues: ${JSON.stringify(data.promptFeedback.safetyRatings)}`;
+                         }
+                    }
+                }
+
+            } catch (error) {
+                console.error('Fetch Error:', error);
+                resultDiv.textContent = 'An error occurred while trying to contact the AI. Check your internet connection or the browser console for more details.';
+            }
+        }
+    </script>
+</body>
+</html>
